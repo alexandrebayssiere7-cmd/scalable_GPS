@@ -1,11 +1,9 @@
 # borehole data
 
-C'est un exemple JOUET:
- * un bruit gaussien est simplement ajouté à une fonction connue (voir generate_dataset.m),
- * la fonction n'est pas, en réalité, coûteuse à évaluer (donc pas besoin d'un émulateur).
+This is a TOY example:
+ * Gaussian noise is simply added to a known function (see generate_dataset.m),
+ * the function is not actually expensive to evaluate (so no emulator is needed).
 
-borehole: "forage", "trou de sonde"
+The meaning of the input variables is given by Harper & Gupta (1983).
 
-La signification des variables d'entrée est donnée par Harper & Gupta (1983).
-
-La sortie est un débit en m^3/an.
+The output is a water flow rate in m^3/year.

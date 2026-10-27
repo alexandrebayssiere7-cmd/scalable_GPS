@@ -10,21 +10,21 @@ def rbf_covariance(X, Y, l, tau):
         """
         X : (n1, d)
         Y : (n2, d)
-        retourne une matrice (n1, n2)
+        returns an (n1, n2) matrix
         """
         X = np.asarray(X, dtype=np.float64)
         Y = np.asarray(Y, dtype=np.float64)
 
-        # Normes au carré
+        # Squared norms
         X_norm = np.sum(X**2, axis=1)[:, None]   # (n1, 1)
         Y_norm = np.sum(Y**2, axis=1)[None, :]   # (1, n2)
 
-        # Distances au carré : ||x_i||^2 + ||y_j||^2 - 2 x_i·y_j
+        # Squared distances: ||x_i||^2 + ||y_j||^2 - 2 x_i·y_j
         sq_dists = X_norm + Y_norm - 2.0 * X @ Y.T
 
-        # Matrice de covariance RBF
+        # RBF covariance matrix
         return tau**2 * np.exp(-0.5 * sq_dists / (l**2))
-# Les 3 boucles imbriquées 1, 2 et 3 donnent en pire cas une complexité en O(n^3)
+# The 3 nested loops 1, 2 and 3 give a worst-case complexity of O(n^3)
 
 
 
@@ -32,15 +32,15 @@ def rbf_covariance(X, Y, l, tau):
 
 def rbf_kernel_col(X, i, l, tau):
     """
-    Colonne i de la matrice de covariance RBF K(X, X) sans construire K.
+    Column i of the RBF covariance matrix K(X, X) without building K.
 
-    Retourne le vecteur K[:, i] (shape: (n,)) avec
+    Returns the vector K[:, i] (shape: (n,)) with
     K[j, i] = tau^2 * exp(-||x_j - x_i||^2 / (2 l^2)).
     """
     X = np.asarray(X, dtype=np.float64)
     x_i = X[i]                          # (d,)
 
-    # Différences X_j - x_i pour tous j
+    # Differences X_j - x_i for all j
     diff = X - x_i                      # (n, d)
     r2 = np.einsum('ij,ij->i', diff, diff)   # ||x_j - x_i||^2
 
@@ -50,62 +50,62 @@ def rbf_kernel_col(X, i, l, tau):
 
 def ic_pivot_rbf(X, l, tau, eta):
     """
-    Cholesky incomplète avec pivot pour un noyau RBF,
-    SANS construire explicitement K(X,X).
+    Pivoted incomplete Cholesky for an RBF kernel,
+    WITHOUT explicitly building K(X,X).
 
     X   : (n, d)
     l   : lengthscale
     tau : amplitude
-    eta : tolérance trace (0 < eta < 1)
+    eta : trace tolerance (0 < eta < 1)
 
-    Retourne :
-      L : (n, k), telle que K ≈ L L^T
-      k : rang effectif
+    Returns:
+      L : (n, k), such that K ≈ L L^T
+      k : effective rank
     """
     X = np.asarray(X, dtype=np.float64)
     n, d = X.shape
 
-    # Diagonale de K pour RBF : K_ii = tau^2
+    # Diagonal of K for RBF: K_ii = tau^2
     diagK = np.full(n, tau**2, dtype=np.float64)
     M = np.sum(diagK)       # trace(K)
 
     L = np.zeros((n, n), dtype=np.float64)
-    D = diagK.copy()        # diagonale résiduelle
-    S = 0.0                 # somme des normes de colonnes = Tr(L L^T)
+    D = diagK.copy()        # residual diagonal
+    S = 0.0                 # sum of column norms = Tr(L L^T)
     k = 0
-    J = np.arange(n)        # indices encore disponibles pour pivots
+    J = np.arange(n)        # indices still available as pivots
 
     while S < (1.0 - eta) * M:
         if J.size == 0:
             break
 
-        # Pivot = index avec plus grande diagonale résiduelle
+        # Pivot = index with the largest residual diagonal
         ik = J[np.argmax(D[J])]
 
         if D[ik] <= 0:
-            # On arrête si la SPD-ité se dégrade numériquement
+            # Stop if positive definiteness degrades numerically
             break
 
-        # Élément diagonal de la nouvelle colonne
+        # Diagonal entry of the new column
         L[ik, k] = np.sqrt(D[ik])
 
-        # Mettre à jour l'ensemble des indices disponibles
+        # Update the set of available indices
         J = J[J != ik]
 
-        # Colonne de K correspondant au pivot ik, calculée à la volée
+        # Column of K for pivot ik, computed on the fly
         col_ik = rbf_kernel_col(X, ik, l, tau)   # shape: (n,)
 
         if k > 0:
             # L[J, k] = (K[J, ik] - L[J, :k] @ L[ik, :k]) / L[ik, k]
             L[J, k] = (col_ik[J] - L[J, :k] @ L[ik, :k]) / L[ik, k]
         else:
-            # Première colonne : pas encore de rang k-1
+            # First column: no rank k-1 yet
             L[J, k] = col_ik[J] / L[ik, k]
 
-        # Mise à jour de D sur les indices restants
+        # Update D on the remaining indices
         D[J] -= L[J, k] ** 2
 
-        # Mise à jour de la somme S = Tr(L L^T)
+        # Update the sum S = Tr(L L^T)
         S += L[ik, k]**2 + np.sum(L[J, k]**2)
         k += 1
 
@@ -117,26 +117,26 @@ def cholesky(A):
     L=np.zeros((n,n))
     L[0,0]=sqrt(A[0,0])
     for j in range (1,n):
-        L[j,0]=A[0,j]/L[0,0] #on remplit la 1ère colonne
+        L[j,0]=A[0,j]/L[0,0] # fill the 1st column
 
-    for i in range (1,n):  #on remplit la i-ème colonne                          #1
+    for i in range (1,n):  # fill the i-th column                          #1
         s1=0
         for k in range(i):
             s1+=L[i,k]**2
-        L[i,i]=sqrt(A[i,i]-s1) #coefficient diagonal
+        L[i,i]=sqrt(A[i,i]-s1) # diagonal coefficient
         for j in range(i+1,n):                         #2
             s2=0
-            for k in range(i):  #reste de la colonne en dessous de la diagonale                 #3
+            for k in range(i):  # rest of the column below the diagonal                 #3
                 s2+=L[i,k]*L[j,k]
             L[j,i]=(A[i,j]-s2)/L[i,i]
     return(L)
 
 
-  
+
 
 def ic_fast(A, eta):
     """
-    Décomposition de Cholesky incomplète sans pivot (optimisée).
+    Incomplete Cholesky decomposition without pivoting (optimized).
     """
     n = A.shape[0]
     M = np.trace(A)
@@ -154,11 +154,11 @@ def ic_fast(A, eta):
         diag_val = A[i, i] - s1
         #if diag_val <= 0:
             #diag_val = 0
-            #break  # sécurité si A pas SPD
+            #break  # safety in case A is not SPD
         L[i, i] = sqrt(diag_val)
 
         if i + 1 < n:
-            # Calcul vectorisé de L[i+1:, i]
+            # Vectorized computation of L[i+1:, i]
             lij = (A[i+1:, i] - L[i+1:, :i] @ L[i, :i].T) / L[i, i]
             L[i+1:, i] = lij
             S += L[i, i]**2 + np.sum(lij**2)
@@ -170,7 +170,7 @@ def ic_fast(A, eta):
     return L[:, :i],i
 
 
-def max_gauche(tab):
+def max_first_column(tab):
   maxval = tab[0][0]
   maxind = 0
   for i in range(1,len(tab)):
@@ -179,23 +179,23 @@ def max_gauche(tab):
       maxind = i
   return tab[maxind],maxind
 
-  
+
 
 
 def ic_pivot_fast(A, eta):
     """
-    Cholesky incomplète avec pivot (optimisée).
-    
+    Pivoted incomplete Cholesky (optimized).
+
     Args:
-        A (ndarray): Matrice symétrique définie positive (n x n).
-        eta (float): Paramètre de précision dans [0, 1].
-    
+        A (ndarray): Symmetric positive definite matrix (n x n).
+        eta (float): Precision parameter in [0, 1].
+
     Returns:
-        ndarray: Matrice L de taille (n x k), telle que A ≈ L @ L.T
+        ndarray: Matrix L of size (n x k), such that A ≈ L @ L.T
     """
     n = A.shape[0]
     M = np.trace(A)
-    
+
     L = np.zeros((n, n))
     D = np.diag(A).copy()
     #used = np.zeros(n, dtype=bool)
@@ -204,36 +204,36 @@ def ic_pivot_fast(A, eta):
     J = np.array([i for i in range(n)])
 
     while S < (1 - eta) * M:
-        # Sélection du pivot (non utilisé) avec la plus grande valeur diagonale
+        # Pick the (unused) pivot with the largest diagonal value
         if len(J) == 0:
             break
         ik = J[np.argmax(D[J])]
-        
+
         if D[ik] <= 0:
-            break  # Sécurité si la matrice perd sa SPD-ité
+            break  # Safety in case the matrix loses positive definiteness
 
         L[ik, k] = sqrt(D[ik])
 
-        # Mise à jour des lignes restantes
+        # Update the remaining rows
         J = J[J != ik]
         if k > 0:
-            # Calcul vectorisé : L[J, k] = (A[J, ik] - dot(L[J, :k], L[ik, :k])) / L[ik, k]
+            # Vectorized: L[J, k] = (A[J, ik] - dot(L[J, :k], L[ik, :k])) / L[ik, k]
             L[J, k] = (A[J, ik] - L[J, :k] @ L[ik, :k]) / L[ik, k]
         else:
             L[J, k] = A[J, ik] / L[ik, k]
 
-        # Mise à jour de D
+        # Update D
         D[J] -= L[J, k]**2
 
 
-        # Mettre à jour la somme S
+        # Update the sum S
         S += L[ik, k]**2 + np.sum(L[J, k]**2)
         k += 1
 
     return L[:, :k],k
 
 
-def inv_woodburry2mult(L,sigma,K):
+def woodbury_solve(L,sigma,K):
     a=L.T@K
     M=np.eye(L.shape[1])+1/sigma**2*(L.T@L)
     b=np.linalg.solve(M,a)
@@ -244,56 +244,56 @@ def inv_woodburry2mult(L,sigma,K):
 
 
 
-def inv_woodburry(L,sigma):
+def woodbury_inverse(L,sigma):
     """
-    Calcule (LL^T + σ²I)^(-1) via la formule de Woodbury optimisée.
-    
-    Utilise: (LL^T + σ²I)^(-1) = (1/σ²)(I - L(I + L^T L/σ²)^(-1)L^T/σ²)
-    
+    Computes (LL^T + σ²I)^(-1) with the optimized Woodbury formula.
+
+    Uses: (LL^T + σ²I)^(-1) = (1/σ²)(I - L(I + L^T L/σ²)^(-1)L^T/σ²)
+
     Args:
-        L: Matrice (n x k) approximation de Cholesky
-        sigma: Paramètre de bruit
-    
+        L: (n x k) Cholesky approximation matrix
+        sigma: Noise parameter
+
     Returns:
-        Matrice inverse (n x n)
-        
-    Complexité: O(nk² + k³) au lieu de O(n²k + k³)
+        Inverse matrix (n x n)
+
+    Complexity: O(nk² + k³) instead of O(n²k + k³)
     """
     n = L.shape[0]
     k = L.shape[1]
     sigma_sq = sigma ** 2
     inv_sigma_sq = 1.0 / sigma_sq
-    
-    # Calcul de L^T @ L: O(nk²) au lieu de O(n²k)
+
+    # Compute L^T @ L: O(nk²) instead of O(n²k)
     LTL = L.T @ L
-    
+
     # I_k + L^T L / σ²: O(k²)
     M = np.eye(k) + LTL * inv_sigma_sq
-    
-    # Inversion de M (k x k): O(k³)
+
+    # Inverse of M (k x k): O(k³)
     M_inv = np.linalg.inv(M)
-    
-    # Calcul final: (1/σ²)(I - L @ M_inv @ L^T / σ²)
+
+    # Final computation: (1/σ²)(I - L @ M_inv @ L^T / σ²)
     # L @ M_inv: O(nk²)
     # (L @ M_inv) @ L^T: O(nk²)
     temp = L @ np.linalg.solve(M,L.T)
-    
-    # Résultat: (1/σ²)(I - temp/σ²)
+
+    # Result: (1/σ²)(I - temp/σ²)
     result = inv_sigma_sq * (np.eye(n) - temp * inv_sigma_sq)
-    
+
     return result
 
 '''A = np.random.rand(5,5)
-# Construire une matrice symétrique définie positive
+# Build a symmetric positive definite matrix
 M = np.dot(A.T, A)
 print(M)
 print(ic(M,0.99))
 print(np.trace(M))
-print(inv_woodburry(ic(M,0.99),0.1))
+print(woodbury_inverse(ic(M,0.99),0.1))
 print(np.linalg.inv(M+0.1**2*np.eye(5)))'''
 
 
-def inv_trig_inf(A):
+def inv_lower_triangular(A):
     n=len(A)
     M=np.zeros([n,n])
     for i in range(n):
@@ -304,34 +304,34 @@ def inv_trig_inf(A):
                 s+=A[i][k]*M[k][j]
             M[i][j]=-1/A[i][i] * s
     return M
-'''Matrice_test=np.array([[1,0,0,0],[3,60,0,0],[27,69,102,0],[15,11,345,25]])
-inverse_test=inv_trig_inf(Matrice_test)
-print(np.dot(Matrice_test,inverse_test))'''
+'''test_matrix=np.array([[1,0,0,0],[3,60,0,0],[27,69,102,0],[15,11,345,25]])
+test_inverse=inv_lower_triangular(test_matrix)
+print(np.dot(test_matrix,test_inverse))'''
 
-def inv_fast(M):
+def inv_cholesky(M):
     L=cholesky(M)
-    inv_L=inv_trig_inf(L)
+    inv_L=inv_lower_triangular(L)
     res= np.dot(inv_L.T,inv_L)
     return res
 '''M=np.array([[2,1,0],[1,1,0],[0,0,3]])
-Y=inv_fast(M)
+Y=inv_cholesky(M)
 print(Y)
 print(np.dot(Y,M))'''
 
 
-### MESURE du TEMPS ####
+### RUNTIME MEASUREMENT ####
 
-def generateur_matrice_SDSP(n):
-    Q, _ = np.linalg.qr(np.random.rand(n, n))  
-    D = np.diag(np.random.uniform(1, 10, n))  
-    A = Q.T @ D @ Q 
+def random_spd_matrix(n):
+    Q, _ = np.linalg.qr(np.random.rand(n, n))
+    D = np.diag(np.random.uniform(1, 10, n))
+    A = Q.T @ D @ Q
     return A
 
-def mesurer_temps_execution(fonction, *args):
+def measure_runtime(function, *args):
     start = time.perf_counter()
-    resultat = fonction(*args)  
+    result = function(*args)
     end = time.perf_counter()
-    return end - start  
+    return end - start
 
 
 def distance(a,b):
@@ -343,77 +343,77 @@ def distance(a,b):
             s+=(a[i]-b[i])**2
     return sqrt(s)
 
-def mat_soustractions(x1,x2):
+def pairwise_distances(x1,x2):
     n1=len(x1)
     n2=len(x2)
     M=np.zeros([n1,n2])
     for i in range(n1):
         for j in range(n2):
             M[i][j]=distance(x1[i],x2[j])
-    return M 
+    return M
 
-    
-### RESOLUTION DE SYST TRIANGULAIRE ###
+
+### TRIANGULAR SYSTEM SOLVING ###
 
 def forward_substitution(L, b):
-    """Résout Ly = b par substitution avant."""
+    """Solves Ly = b by forward substitution."""
     n = L.shape[0]
     y = np.zeros(n)
-    
+
     for i in range(n):
         y[i] = (b[i] - np.dot(L[i, :i], y[:i])) / L[i, i]
-    
+
     return y
 
 def backward_substitution(LT, y):
-    """Résout L^T x = y par substitution arrière."""
+    """Solves L^T x = y by backward substitution."""
     n = LT.shape[0]
     x = np.zeros(n)
-    
+
     for i in range(n - 1, -1, -1):
         x[i] = (y[i] - np.dot(LT[i, i + 1:], x[i + 1:])) / LT[i, i]
-    
+
     return x
 
 
-def courbe_eta(X_train, y_train, X_test,y_test, l, tau, sigma, etas):
+def eta_curve(X_train, y_train, X_test,y_test, l, tau, sigma, etas):
     """
-    Calcule, pour chaque eta :
-      - le rang k de la Cholesky incomplète,
-      - la MSE de la prédiction vs GP complet (dense).
+    For each eta, computes:
+      - the rank k of the incomplete Cholesky,
+      - the MSE of the prediction vs the full (dense) GP.
     """
 
     n_train = X_train.shape[0]
 
-    # Matrices de covariance
+    # Covariance matrices
     K11 = rbf_covariance(X_train, X_train, l, tau)
     K21 = rbf_covariance(X_test,  X_train, l, tau)
 
-    # --- Référence : GP "complet" ---
-    debfull=time.time()
+    # --- Reference: "full" GP ---
+    start_full=time.time()
     K_full = K11 + sigma**2 * np.eye(n_train)
     alpha_full = np.linalg.solve(K_full, y_train)
     y_pred_full = K21 @ alpha_full
-    endfull=time.time()
-    t_full=endfull-debfull
+    end_full=time.time()
+    t_full=end_full-start_full
     #print(t_full)
     mse_full=np.mean((y_pred_full-y_test)**2)
     k_list = []
     mse_list = []
     time_list = []
-    # --- Boucle sur les valeurs de eta ---
+    # --- Loop over the eta values ---
     for eta in etas:
-        # IC pivotée
+        # Pivoted IC
         a=time.time()
         L, k = ic_pivot_fast(K11, eta)
 
         # (K11 + sigma^2 I)^(-1) y ≈ via Woodbury
-        alpha_eta = inv_woodburry2mult(L, sigma, y_train)
+        alpha_eta = woodbury_solve(L, sigma, y_train)
         y_pred_eta = K21 @ alpha_eta
         b=time.time()
 
         t=b-a
-        # MSE vs la prédiction de référence
+        # MSE vs the reference prediction
         mse = np.mean((y_pred_eta - y_pred_full)**2)
 
         k_list.append(k)
@@ -424,24 +424,24 @@ def courbe_eta(X_train, y_train, X_test,y_test, l, tau, sigma, etas):
 
 def rbf_kernel(X1, X2, log_tau, log_ell):
     """
-    Kernel RBF isotrope :
+    Isotropic RBF kernel:
     k(x, x') = tau^2 * exp(-||x - x'||^2 / (2 ell^2))
-    avec tau = exp(log_tau), ell = exp(log_ell).
+    with tau = exp(log_tau), ell = exp(log_ell).
     """
     tau = torch.exp(log_tau)
     ell = torch.exp(log_ell)
 
     # X1 : (n1, d), X2 : (n2, d)
-    # ||x_i||^2 et ||x_j||^2
+    # ||x_i||^2 and ||x_j||^2
     X1_norm = torch.sum(X1**2, dim=1, keepdim=True)  # (n1, 1)
     X2_norm = torch.sum(X2**2, dim=1, keepdim=True).T  # (1, n2)
 
-    # Matrice des distances au carré
+    # Squared distance matrix
     R2 = X1_norm + X2_norm - 2.0 * X1 @ X2.T          # (n1, n2)
-    R2 = torch.clamp(R2, min=0.0)                      # sécurité numérique
+    R2 = torch.clamp(R2, min=0.0)                      # numerical safety
 
     arg = -0.5 * R2 / (ell**2)
-    arg = torch.clamp(arg, min=-50.0, max=0.0)        # éviter overflow exp
+    arg = torch.clamp(arg, min=-50.0, max=0.0)        # avoid exp overflow
 
     K = (tau**2) * torch.exp(arg)
     return K
@@ -459,8 +459,8 @@ def nll(X_train,y_train, eta, theta):
     K11 = rbf_covariance(X_train, X_train, tau,l)
 
     L, k = ic_pivot_fast(K11, eta)   # L: (n x k)
-    
-    alpha = inv_woodburry2mult(L, sigma, y_train)
+
+    alpha = woodbury_solve(L, sigma, y_train)
     quad = float(y_train.T @ alpha)
 
     LtL = L.T @ L            # (k x k)
@@ -495,7 +495,7 @@ def gradient_descent_hyperparams2(X_train, y_train, eta,
     theta = theta0_log.copy()
 
     for it in range(max_iter):
-   
+
         g = numerical_gradient( X_train, y_train, eta, theta)
 
         theta = theta - lr * g
@@ -525,25 +525,25 @@ def approx_log_marginal_likelihood2(theta, X_train, y_train, eta):
 
     n = X_train.shape[0]
 
-    # Matrice de covariance K11
+    # Covariance matrix K11
     t1=time.time()
     K11 = rbf_covariance(X_train, X_train, l, tau)
     t2=time.time()
-    #print("Durée de la création de K11:", t2-t1)
+    #print("Time to build K11:", t2-t1)
 
     t1=time.time()
 
-    # Cholesky incomplète: K ≈ L L^T
+    # Incomplete Cholesky: K ≈ L L^T
     L, k = ic_pivot_rbf(K11, eta)   # L: (n x k)
     tint=time.time()
     #print(tint-t1)
-    #print("rang",k)
+    #print("rank",k)
 
-    # Terme quadratique y^T (K + σ²I)^(-1) y
-    alpha = inv_woodburry2mult(L, sigma, y_train)
+    # Quadratic term y^T (K + σ²I)^(-1) y
+    alpha = woodbury_solve(L, sigma, y_train)
     quad = float(y_train.T @ alpha)
     t2=time.time()
-    #print("Durée pour trouver le quadratique:", t2-t1)
+    #print("Time to compute the quadratic term:", t2-t1)
 
     t1=time.time()
     # Log-det |K + σ²I| ≈ |L L^T + σ²I|
@@ -556,14 +556,14 @@ def approx_log_marginal_likelihood2(theta, X_train, y_train, eta):
     logdet_M = 2 * np.sum(np.log(np.diag(R)))
     logdet = 2 * n * np.log(sigma) + logdet_M
     t2=time.time()
-    #print("Durée pour trouver le log det:", t2-t1)
+    #print("Time to compute the log det:", t2-t1)
     logp = -0.5 * quad - 0.5 * logdet - 0.5 * n * np.log(2 * np.pi)
     return logp
 
 def approx_log_marginal_likelihood(theta, X_train, y_train, eta):
     """
     theta = [log_tau, log_sigma, log_l]
-    Approx log p(y | theta) via IC + Woodbury, sans construire K.
+    Approximates log p(y | theta) via IC + Woodbury, without building K.
     """
     log_tau, log_sigma, log_l = theta
     tau   = np.exp(log_tau)
@@ -572,14 +572,14 @@ def approx_log_marginal_likelihood(theta, X_train, y_train, eta):
 
     n = X_train.shape[0]
 
-    # --- Cholesky incomplète matrix-free: K ≈ L L^T ---
+    # --- Matrix-free incomplete Cholesky: K ≈ L L^T ---
     t1 = time.time()
     L, k = ic_pivot_rbf(X_train, l, tau, eta)   # <--- NO K11
     tint = time.time()
     #print("IC (matrix-free) time:", tint - t1, "| rank =", k)
 
-    # --- Terme quadratique y^T (K + σ²I)^(-1) y ---
-    alpha = inv_woodburry2mult(L, sigma, y_train)   # (n,)
+    # --- Quadratic term y^T (K + σ²I)^(-1) y ---
+    alpha = woodbury_solve(L, sigma, y_train)   # (n,)
     quad = float(y_train.T @ alpha)
 
     t2 = time.time()
@@ -592,7 +592,7 @@ def approx_log_marginal_likelihood(theta, X_train, y_train, eta):
     try:
         R = np.linalg.cholesky(M)
     except np.linalg.LinAlgError:
-        return -1e30  # ou une très petite log-vraisemblance
+        return -1e30  # i.e. a very small log-likelihood
 
     logdet_M = 2 * np.sum(np.log(np.diag(R)))
     logdet = 2 * n * np.log(sigma) + logdet_M
@@ -632,10 +632,10 @@ def gradient_descent_hyperparams(X_train, y_train, eta,
 
     for it in range(max_iter):
         f = loss(theta, X_train, y_train, eta)
-   
+
         g = numerical_gradient(theta, X_train, y_train, eta)
 
-        # gradient clipping pour éviter des updates monstrueuses
+        # gradient clipping to avoid huge updates
         g_norm = np.linalg.norm(g)
         if g_norm > 1e3:
             g = g * (1e3 / g_norm)
@@ -643,7 +643,7 @@ def gradient_descent_hyperparams(X_train, y_train, eta,
         # update
         theta = theta - lr * g
 
-        # CLIP des paramètres log (hyperparams dans [1e-3, 1e3])
+        # CLIP the log parameters (hyperparameters in [1e-3, 1e3])
         theta = np.clip(theta, np.log(1e-3), np.log(1e3))
 
         history.append(f)
@@ -693,9 +693,9 @@ def gradient_descent_hyperparams(X_train, y_train, eta,
 '''
 def rbf_kernel_torch(X1, X2, log_tau, log_ell):
     """
-    Kernel RBF isotrope en torch :
+    Isotropic RBF kernel in torch:
     k(x, x') = tau^2 * exp(-||x - x'||^2 / (2 ell^2))
-    avec tau = exp(log_tau), ell = exp(log_ell).
+    with tau = exp(log_tau), ell = exp(log_ell).
     """
     tau = torch.exp(log_tau)
     ell = torch.exp(log_ell)
@@ -704,10 +704,10 @@ def rbf_kernel_torch(X1, X2, log_tau, log_ell):
     X1_sq = torch.sum(X1**2, dim=1, keepdim=True)      # (n1, 1)
     X2_sq = torch.sum(X2**2, dim=1, keepdim=True).T    # (1, n2)
     R2 = X1_sq + X2_sq - 2.0 * (X1 @ X2.T)             # (n1, n2)
-    R2 = torch.clamp(R2, min=0.0)                      # sécurité numérique
+    R2 = torch.clamp(R2, min=0.0)                      # numerical safety
 
     arg = -0.5 * R2 / (ell**2)
-    arg = torch.clamp(arg, min=-50.0, max=0.0)         # éviter overflow exp
+    arg = torch.clamp(arg, min=-50.0, max=0.0)         # avoid exp overflow
 
     K = (tau**2) * torch.exp(arg)
     return K
@@ -715,7 +715,7 @@ def rbf_kernel_torch(X1, X2, log_tau, log_ell):
 
 def neg_log_marginal_likelihood_torch(params, X, y, jitter=1e-6):
     """
-    NLL exacte d'un GP RBF avec bruit gaussien :
+    Exact NLL of an RBF GP with Gaussian noise:
     params = (log_tau, log_sigma, log_ell)
     X : (n, d), y : (n,)
     """
@@ -740,7 +740,7 @@ def neg_log_marginal_likelihood_torch(params, X, y, jitter=1e-6):
     # log |K|
     logdetK = 2.0 * torch.sum(torch.log(torch.diag(L)))
 
-    # Terme constant en float (math.log, pas torch.log) – sinon bug
+    # Constant term as a float (math.log, not torch.log), otherwise it breaks
     nll = 0.5 * quad + 0.5 * logdetK + 0.5 * n * math.log(2.0 * math.pi)
     return nll
 
@@ -750,18 +750,18 @@ def fit_gp_hypers_autodiff(X_np, y_np,
                            max_iter=200,
                            verbose=True):
     """
-    Apprend (tau, sigma, ell) par minimisation de la NLL exacte
-    via autodiff PyTorch, sur un sous-échantillon.
+    Learns (tau, sigma, ell) by minimizing the exact NLL
+    with PyTorch autodiff, on a subsample.
 
     X_np : (n, d) numpy
     y_np : (n,)   numpy
     """
 
-    # Conversion en Torch
+    # Convert to Torch
     X = torch.from_numpy(X_np)  # (n, d)
     y = torch.from_numpy(y_np)  # (n,)
 
-    # Paramètres en log pour rester dans R
+    # Parameters in log space to stay in R
     init = torch.tensor(
         [0.0,                      # log_tau ~ log(1)
          1,            # log_sigma ~ log(0.1)
@@ -792,7 +792,7 @@ def fit_gp_hypers_autodiff(X_np, y_np,
                 f"tau={tau:.3g}, sigma={sigma:.3g}, ell={ell:.3g}"
             )
 
-    # Retour en numpy / float
+    # Back to numpy / float
     log_tau, log_sigma, log_ell = params.detach().numpy()
     tau   = float(math.exp(log_tau))
     sigma = float(math.exp(log_sigma))
@@ -805,7 +805,7 @@ def fit_gp_hypers_autodiff(X_np, y_np,
 
 from scipy.optimize import minimize
 
-# On suppose que rbf_covariance(X, Y, l, tau) est déjà défini dans ton fichier.
+# Assumes rbf_covariance(X, Y, l, tau) is already defined in this file.
 
 
 
@@ -813,7 +813,7 @@ from scipy.optimize import minimize
 def approx_log_marginal_likelihood(theta, X_train, y_train, eta):
     """
     theta = [log_tau, log_sigma, log_l]
-    Approx log p(y | theta) via IC + Woodbury, sans construire K.
+    Approximates log p(y | theta) via IC + Woodbury, without building K.
     """
     sigma=10
     log_tau, log_l = theta
@@ -822,14 +822,14 @@ def approx_log_marginal_likelihood(theta, X_train, y_train, eta):
 
     n = X_train.shape[0]
 
-    # --- Cholesky incomplète matrix-free: K ≈ L L^T ---
+    # --- Matrix-free incomplete Cholesky: K ≈ L L^T ---
     t1 = time.time()
     L, k = ic_pivot_rbf(X_train, l, tau, eta)   # <--- NO K11
     tint = time.time()
     #print("IC (matrix-free) time:", tint - t1, "| rank =", k)
 
-    # --- Terme quadratique y^T (K + σ²I)^(-1) y ---
-    alpha = inv_woodburry2mult(L, sigma, y_train)   # (n,)
+    # --- Quadratic term y^T (K + σ²I)^(-1) y ---
+    alpha = woodbury_solve(L, sigma, y_train)   # (n,)
     quad = float(y_train.T @ alpha)
 
     t2 = time.time()
@@ -842,7 +842,7 @@ def approx_log_marginal_likelihood(theta, X_train, y_train, eta):
     try:
         R = np.linalg.cholesky(M)
     except np.linalg.LinAlgError:
-        return -1e30  # ou une très petite log-vraisemblance
+        return -1e30  # i.e. a very small log-likelihood
 
     logdet_M = 2 * np.sum(np.log(np.diag(R)))
     logdet = 2 * n * np.log(sigma) + logdet_M
@@ -868,19 +868,19 @@ def fit_hyperparams_bfgs(
     random_state=0
 ):
     """
-    Estimation de (tau, l) par minimisation de la NLL exacte
-    avec sigma fixé, en utilisant (L-)BFGS-B sur un sous-échantillon.
+    Estimates (tau, l) by minimizing the exact NLL
+    with sigma fixed, using (L-)BFGS-B on a subsample.
 
     X_train : (N, d)
     y_train : (N,)
     sigma_fixed : float
-        Bruit d'observation fixé.
+        Fixed observation noise.
     n_subsample : int
-        Taille du sous-échantillon utilisé pour l'optimisation.
+        Size of the subsample used for the optimization.
     init_log_tau, init_log_l : float
-        Valeurs initiales dans l'espace log.
+        Initial values in log space.
     maxiter : int
-        Nombre max d'itérations pour l'optimiseur.
+        Maximum number of optimizer iterations.
     """
 
     X_train = np.asarray(X_train, dtype=np.float64)
@@ -890,27 +890,27 @@ def fit_hyperparams_bfgs(
     y_sub = y_train
     history_nll = []
 
-    # --------- 2) Fonction objectif pour scipy.minimize ---------
+    # --------- 2) Objective function for scipy.minimize ---------
     def objective(log_params):
         val=nll(
             log_params, X_sub, y_sub,eta
         )
-        history_nll.append(val) 
+        history_nll.append(val)
         return val
 
-    # Paramètres initiaux en log
+    # Initial parameters in log space
     x0 = np.array([init_log_tau, init_log_l], dtype=np.float64)
 
-    # On peut mettre des bornes raisonnables pour stabiliser
+    # Reasonable bounds help stabilize the optimization
     bounds = [
-        (np.log(1e-3), np.log(1000)),   # tau dans [1e-3, 1e3] en gros
-        (np.log(0.9), np.log(10)),   # l   dans [1e-3, 1e2]
+        (np.log(1e-3), np.log(1000)),   # tau roughly in [1e-3, 1e3]
+        (np.log(0.9), np.log(10)),   # l   in [1e-3, 1e2]
     ]
 
     res = minimize(
         objective,
         x0,
-        method="L-BFGS-B",    # ou "BFGS" si tu préfères
+        method="L-BFGS-B",    # or "BFGS" if preferred
         bounds=bounds,
         options={"maxiter": maxiter},
     )
@@ -919,10 +919,10 @@ def fit_hyperparams_bfgs(
     tau_opt = float(np.exp(log_tau_opt))
     l_opt = float(np.exp(log_l_opt))
 
-    print("Optimisation terminée.")
+    print("Optimization finished.")
     print("  tau* =", tau_opt)
     print("  l*   =", l_opt)
-    print("  sigma (fixé) =", sigma_fixed)
+    print("  sigma (fixed) =", sigma_fixed)
     print("  NLL_min =", res.fun)
 
     return tau_opt, l_opt, res,np.array(history_nll)

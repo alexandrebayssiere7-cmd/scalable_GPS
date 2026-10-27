@@ -2,13 +2,13 @@ import pandas as pd
 import numpy as np
 
 scenario_df = pd.read_csv(
-    "data/bouquetins/scenario.csv",
+    "data/ibex/scenario.csv",
     header=0,
     index_col=0
 )
 
 values_df = pd.read_csv(
-    "data/bouquetins/PopSize1_2029.csv",
+    "data/ibex/PopSize1_2029.csv",
     header=0,
     index_col=0
 )
@@ -25,8 +25,8 @@ for i in range(216):
         df_obs.iloc[idx, 3] = values_df.iloc[j, i]
 
 
-#MELANGER LES LIGNES
+# SHUFFLE THE ROWS
 df_obs = df_obs.sample(frac=1)
 
 
-df_obs.to_csv("data/bouquetins/bouquetins.csv",index=False)
+df_obs.to_csv("data/ibex/ibex.csv",index=False)

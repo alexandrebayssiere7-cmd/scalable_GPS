@@ -1,51 +1,51 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from Regression import GP,GP_ic_matrixfree
+from regression import GP,GP_ic_matrixfree
 import time
-from fonctions_annexes import ic_pivot_fast, inv_woodburry2mult,rbf_covariance,courbe_eta,gradient_descent_hyperparams,fit_hyperparams_bfgs,nll,ic_fast,ic_pivot_rbf
+from helpers import ic_pivot_fast, woodbury_solve,rbf_covariance,eta_curve,gradient_descent_hyperparams,fit_hyperparams_bfgs,nll,ic_fast,ic_pivot_rbf
 
 
-# Nombre de points d'apprentissage et de test
-n_train = 20000    # par ex. 10 000 observations
-n_test  = 10000     # comme tu l'avais mis
+# Number of training and test points
+n_train = 20000    # e.g. 10,000 observations
+n_test  = 10000
 
-# Chargement des données d'observation (train) et de test
+# Load the observation (train) and test data
 df_obs = pd.read_csv(
-    "data/bouquetins/bouquetins.csv",
+    "data/ibex/ibex.csv",
     header=None,
     skiprows=1
-).iloc[:n_train]              # <-- plusieurs lignes, reste un DataFrame
+).iloc[:n_train]              # <-- several rows, stays a DataFrame
 
 df_tst = pd.read_csv(
-    "data/bouquetins/bouquetins.csv",
+    "data/ibex/ibex.csv",
     header=None,
     skiprows=1
 ).iloc[(n_train+1):(n_train+1+n_test)]
 
-# max et min des données (8 variables d'entrée)
-'''minimaux = np.array([0.05, 100, 63070, 990, 63.1, 700, 1120, 9855])
-maximaux = np.array([0.15, 50000, 115600, 1110, 116, 820, 1680, 12045])'''
+# max and min of the data (8 input variables)
+'''lower_bounds = np.array([0.05, 100, 63070, 990, 63.1, 700, 1120, 9855])
+upper_bounds = np.array([0.15, 50000, 115600, 1110, 116, 820, 1680, 12045])'''
 
-# Convertir toutes les valeurs en float
+# Convert all values to float
 df_obs = df_obs.astype(float)
 df_tst = df_tst.astype(float)
 
 
-# ===================== Normalisation =====================
+# ===================== Normalization =====================
 
-# X = toutes les colonnes sauf la dernière (features)
+# X = all columns except the last one (features)
 X   = df_obs.iloc[:, :-1].to_numpy()   # shape (n_train, 8)
 X_t = df_tst.iloc[:, :-1].to_numpy()   # shape (n_test, 8)
 
-# Normalisation sur chaque dimension avec minimaux/maximaux
-'''X_train = (X   - minimaux) / (maximaux - minimaux)
-X_test  = (X_t - minimaux) / (maximaux - minimaux)'''
+# Per-dimension normalization with lower_bounds/upper_bounds
+'''X_train = (X   - lower_bounds) / (upper_bounds - lower_bounds)
+X_test  = (X_t - lower_bounds) / (upper_bounds - lower_bounds)'''
 X_train = X/100
 X_test  = X_t/100
 
 
-# y = dernière colonne (cible)
+# y = last column (target)
 y_train = df_obs.iloc[:, -1].to_numpy()   # shape (n_train,)
 y_test  = df_tst.iloc[:, -1].to_numpy()   # shape (n_test,)
 
@@ -54,11 +54,11 @@ y_test  = df_tst.iloc[:, -1].to_numpy()   # shape (n_test,)
 
 '''
 
-eta = 1e-3  # ton critère d’IC
+eta = 1e-3  # IC criterion
 theta0=np.log(np.array([10,10,10]))
 tau_opt, sigma_opt, l_opt, hist = gradient_descent_hyperparams(
     X_train, y_train, eta, theta0,
-    lr=0.001,      # commence plutôt petit
+    lr=0.001,      # start rather small
     max_iter=50,
     verbose=True
 )
@@ -86,22 +86,22 @@ plt.show()
 
 
 rmse = np.sqrt(np.mean((y_test[:100] - Y_mean[:100]) ** 2))          
-print(f"Erreur quadratique moyenne (MSE):{rmse:.4f}")
+print(f"Mean squared error (MSE):{rmse:.4f}")
 
 
 
 
-eta = 1e-3  # ton critère d’IC
+eta = 1e-3  # IC criterion
 theta0=[5,2,0.5]
 
 tau_opt, sigma_opt, l_opt, hist = gradient_descent_hyperparams(
     X_train, y_train, eta, theta0,
-    lr=0.001,      # commence plutôt petit
+    lr=0.001,      # start rather small
     max_iter=200,
     verbose=True
 )
 
-history = np.array(hist)   # au cas où
+history = np.array(hist)   # just in case
 
 plt.figure()
 plt.plot(history, marker='o', linestyle='-')
@@ -117,15 +117,15 @@ plt.show()
 
 etas= np.logspace(-6,-1,20)
 
-k_list, mse_list, time_list, t_full, mse_full = courbe_eta(X_train, y_train, X_test, y_test, 3.02, 133.365, 10.5, etas)
+k_list, mse_list, time_list, t_full, mse_full = eta_curve(X_train, y_train, X_test, y_test, 3.02, 133.365, 10.5, etas)
 
 
 plt.figure()
 
-# Courbe MSE_IC(eta) en log-log
+# MSE_IC(eta) curve, log-log
 plt.loglog(etas, mse_list, marker='o', linestyle='-', label='IC MSE vs Full GP MSE',color='g')
 
-# Ligne horizontale pour la MSE du full GP (optionnel)
+# Horizontal line for the full GP MSE (optional)
 plt.axhline(mse_full, linestyle='--', label='Full GP MSE',color='r')
 
 plt.xlabel(r'$\eta$')
@@ -155,10 +155,10 @@ plt.show()
 
 plt.figure()
 
-# Temps IC en fonction de eta (x en log)
+# IC runtime as a function of eta (log x axis)
 plt.semilogx(etas, time_list, marker='o', linestyle='-', label='IC runtime')
 
-# Ligne horizontale pour la Cholesky complète
+# Horizontal line for the full Cholesky
 plt.axhline(t_full, linestyle='--', label='Full Cholesky runtime')
 
 plt.xlabel(r'$\eta$')
@@ -194,28 +194,28 @@ plt.show()
 
 
 rmse = np.sqrt(np.mean((y_test[:100] - Y_mean[:100]) ** 2))          
-print(f"Erreur quadratique moyenne (MSE):{rmse:.4f}")
+print(f"Mean squared error (MSE):{rmse:.4f}")
 
 
-ci_95 = 1.96 * Y_std  # même taille que Y_std
+ci_95 = 1.96 * Y_std  # same size as Y_std
 
 plt.figure()
 
-# Nuage de points avec barres d'erreur verticales
+# Scatter plot with vertical error bars
 plt.errorbar(
     y_test,
     Y_mean,
     yerr=ci_95,
-    fmt='o',            # 'o' = marqueur pour les points
+    fmt='o',            # 'o' = point marker
     markersize=3,
-    ecolor='gray',      # couleur des barres
+    ecolor='gray',      # bar color
     elinewidth=0.5,
-    capsize=2,          # petites barres au bout
+    capsize=2,          # small caps at the ends
     alpha=0.7,
     label='GP prediction ± 1.96σ'
 )
 
-# Ligne idéale y = x
+# Ideal line y = x
 plt.plot(
     [y_test.min(), y_test.max()],
     [y_test.min(), y_test.max()],
@@ -308,20 +308,20 @@ def plot_rank_vs_n(
     eta,
     n_list,
     seed=0,
-    subsample_mode="first",  # "first" ou "random"
+    subsample_mode="first",  # "first" or "random"
 ):
     """
-    Plot du rang k atteint par:
+    Plot of the rank k reached by:
       - ic_pivot_rbf(X, l, tau, eta)  (matrix-free)
-      - ic_fast(K, eta)              (nécessite K)
+      - ic_fast(K, eta)              (needs K)
 
     Args:
         X_train: (N,d) dataset
         l, tau: hyperparams RBF
-        eta: tolérance IC fixée
-        n_list: liste des tailles n à tester
-        seed: pour reproductibilité si subsample_mode="random"
-        subsample_mode: "first" (prend les n premiers) ou "random" (échantillon aléatoire)
+        eta: fixed IC tolerance
+        n_list: list of sizes n to test
+        seed: for reproducibility if subsample_mode="random"
+        subsample_mode: "first" (takes the first n) or "random" (random sample)
     """
     X_train = np.asarray(X_train, dtype=np.float64)
     N = X_train.shape[0]
@@ -334,9 +334,9 @@ def plot_rank_vs_n(
 
     for n in n_list:
         if n > N:
-            raise ValueError(f"n={n} > N={N} (taille du dataset).")
+            raise ValueError(f"n={n} > N={N} (dataset size).")
 
-        # ---- Sous-échantillon ----
+        # ---- Subsample ----
         if subsample_mode == "random":
             idx = rng.choice(N, size=n, replace=False)
             Xn = X_train[idx]
@@ -348,8 +348,8 @@ def plot_rank_vs_n(
         _, k1 = ic_pivot_rbf(Xn, l, tau, eta)
         t1 = time.perf_counter()
 
-        # ---- 2) IC fast (sur K explicite) ----
-        # Attention: coûteux en mémoire/temps quand n grand
+        # ---- 2) IC fast (on explicit K) ----
+        # Warning: expensive in memory/time when n is large
         K = rbf_covariance(Xn, Xn, l, tau)
         t2 = time.perf_counter()
         _, k2 = ic_fast(K, eta)
@@ -363,25 +363,25 @@ def plot_rank_vs_n(
         print(f"n={n:6d} | k_pivot_rbf={k1:4d} (t={t1-t0:.3f}s)"
               f" | k_fast={k2:4d} (t={t3-t2:.3f}s)")
 
-    # ---- Plot rang ----
+    # ---- Rank plot ----
     plt.figure()
     plt.plot(n_list, k_pivot_rbf, marker='o', label="ic_pivot_rbf (matrix-free)")
-    plt.plot(n_list, k_fast, marker='s', label="ic_fast (sur K explicite)")
-    plt.xlabel("Taille n (nombre de points / taille de la matrice)")
-    plt.ylabel("Rang k d'arrêt")
-    plt.title(f"Rang d'arrêt en fonction de n (eta={eta})")
+    plt.plot(n_list, k_fast, marker='s', label="ic_fast (on explicit K)")
+    plt.xlabel("Size n (number of points / matrix size)")
+    plt.ylabel("Stopping rank k")
+    plt.title(f"Stopping rank as a function of n (eta={eta})")
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.legend()
     plt.tight_layout()
     plt.show()
 
-    # ---- Plot temps (optionnel mais souvent utile) ----
+    # ---- Runtime plot (optional but often useful) ----
     plt.figure()
-    plt.plot(n_list, t_pivot_rbf, marker='o', label="Temps ic_pivot_rbf")
-    plt.plot(n_list, t_fast, marker='s', label="Temps ic_fast (inclut K)")
-    plt.xlabel("Taille n")
-    plt.ylabel("Temps (s)")
-    plt.title(f"Temps en fonction de n (eta={eta})")
+    plt.plot(n_list, t_pivot_rbf, marker='o', label="ic_pivot_rbf runtime")
+    plt.plot(n_list, t_fast, marker='s', label="ic_fast runtime (includes K)")
+    plt.xlabel("Size n")
+    plt.ylabel("Time (s)")
+    plt.title(f"Runtime as a function of n (eta={eta})")
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.legend()
     plt.tight_layout()
@@ -448,7 +448,7 @@ def plot_nll_2d(X, y, eta,
 
 
 '''
-# Exemple d'appel (prise de valeurs raisonnables):
+# Example call (with reasonable values):
 plot_nll_2d(X_train, y_train, eta,
             log_tau_range=(2,8),
             log_l_range=(-3,8),
@@ -464,11 +464,11 @@ def plot_nll_like_example(X, y, eta,
                           levels_lines=30,
                           theta_star=None):
     """
-    Reproduit un plot: contourf + contours + colorbar + point rouge.
-    theta_star: tuple (log_tau*, log_l*) ou None
+    Reproduces a plot: contourf + contours + colorbar + red point.
+    theta_star: tuple (log_tau*, log_l*) or None
     """
 
-    # grille
+    # grid
     log_tau_grid = np.linspace(*log_tau_range, n_tau)
     log_l_grid   = np.linspace(*log_l_range, n_l)
 
@@ -476,36 +476,36 @@ def plot_nll_like_example(X, y, eta,
     for i, log_l in enumerate(log_l_grid):
         for j, log_tau in enumerate(log_tau_grid):
             theta = np.array([log_tau, log_l])
-            NLL[i, j] = nll(theta, X, y, eta)   # <-- ta fonction
+            NLL[i, j] = nll(theta, X, y, eta)   # <-- the NLL function
 
-    # maillage (axes en log si tu veux)
+    # mesh (log axes if needed)
     Tau, L = np.meshgrid(np.exp(log_tau_grid), np.exp(log_l_grid))
 
     fig, ax = plt.subplots(figsize=(7, 5))
 
-    # 1) fond coloré
+    # 1) colored background
     cf = ax.contourf(Tau, L, NLL, levels=levels_fill, cmap="viridis")
 
-    # 2) lignes de niveau
+    # 2) contour lines
     cs = ax.contour(Tau, L, NLL, levels=levels_lines,
                     colors="deepskyblue", linewidths=0.8)
 
-    # (optionnel) étiquettes sur certaines lignes
+    # (optional) labels on some lines
     # ax.clabel(cs, inline=True, fontsize=7)
 
-    # 3) point rouge (optionnel)
+    # 3) red point (optional)
     if theta_star is not None:
         log_tau_star, log_l_star = theta_star
         ax.plot(np.exp(log_tau_star), np.exp(log_l_star),
                 "o", color="red", markersize=6, zorder=5)
 
-    # axes en log comme ton contour sur (tau, l)
+    # log axes, as for the contour over (tau, l)
     ax.set_xscale("log")
     ax.set_yscale("log")
 
     ax.set_title("Negative log-likelihood")
-    ax.set_xlabel(r"$\tau$")      # ou "theta1 = log(sigma^2)" si tu veux pareil
-    ax.set_ylabel(r"$\ell$")      # ou "theta2 = log(range)"
+    ax.set_xlabel(r"$\tau$")      # or "theta1 = log(sigma^2)" for the same
+    ax.set_ylabel(r"$\ell$")      # or "theta2 = log(range)"
 
     cbar = fig.colorbar(cf, ax=ax)
     cbar.set_label("NLL")
@@ -514,13 +514,13 @@ def plot_nll_like_example(X, y, eta,
     plt.show()
 
 
-# Exemple d'appel
-# theta_star = (log_tau_opt, log_l_opt) si tu as un optimum
+# Example call
+# theta_star = (log_tau_opt, log_l_opt) if an optimum is known
 plot_nll_like_example(X_train, y_train, eta,
                       log_tau_range=(2, 8),
                       log_l_range=(-3, 8),
                       n_tau=30, n_l=30,
-                      theta_star=(4.7, -1.5))  # à adapter / ou None
+                      theta_star=(4.7, -1.5))  # to adjust / or None
 
 '''
 
@@ -543,18 +543,18 @@ def plot_nll_2d_optimal_point(X, y, eta,
             theta = np.array([log_tau, log_l])
             NLL[i, j] = nll(theta, X, y, eta)
 
-    # Trouver le minimum sur la grille
-    idx_min = np.argmin(NLL)                       # index "aplati"
+    # Find the minimum on the grid
+    idx_min = np.argmin(NLL)                       # "flattened" index
     i_min, j_min = np.unravel_index(idx_min, NLL.shape)
 
     log_l_star   = log_l_grid[i_min]
     log_tau_star = log_tau_grid[j_min]
 
-    # Convertir en (tau, l) pour l'affichage (axes en log)
+    # Convert to (tau, l) for display (log axes)
     tau_star = np.exp(log_tau_star)
     l_star   = np.exp(log_l_star)
 
-    # meshgrid pour contour
+    # meshgrid for the contour
     Tau, L = np.meshgrid(np.exp(log_tau_grid), np.exp(log_l_grid))
 
     fig, ax = plt.subplots(figsize=(7, 5))
@@ -563,7 +563,7 @@ def plot_nll_2d_optimal_point(X, y, eta,
     cs = ax.contour(Tau, L, NLL, levels=levels_lines,
                     colors="deepskyblue", linewidths=0.8)
 
-    # Point rouge = optimum (min NLL)
+    # Red point = optimum (min NLL)
     ax.plot(tau_star, l_star, "o", color="red", markersize=7, zorder=5)
 
     ax.set_xscale("log")
@@ -578,7 +578,7 @@ def plot_nll_2d_optimal_point(X, y, eta,
     plt.tight_layout()
     plt.show()
 
-    print("Optimum sur la grille :")
+    print("Optimum on the grid:")
     print(f"  log_tau* = {log_tau_star:.4f}, log_l* = {log_l_star:.4f}")
     print(f"  tau*     = {tau_star:.4f}, l*     = {l_star:.4f}")
     print(f"  NLL_min  = {NLL[i_min, j_min]:.4f}")
